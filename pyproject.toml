@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cognote"
+version = "0.1.0"
+description = "Local-first meeting recorder and transcriber"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "sounddevice>=0.4",
+    "soundfile>=0.12",
+    "faster-whisper>=1.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+# Install with: pip install -e ".[cuda]"
+# Requires an NVIDIA GPU with CUDA drivers installed.
+cuda = [
+    "nvidia-cublas-cu12",
+    "nvidia-cudnn-cu12",
+]
+
+[project.scripts]
+cognote = "cognote.cli:main"
+
+[tool.setuptools]
+packages = ["cognote"]
+
+[tool.setuptools.package-dir]
+cognote = "src"
