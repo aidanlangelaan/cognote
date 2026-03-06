@@ -29,7 +29,7 @@ No cloud. No accounts. Everything stays on your device.
 ## Installation
 
 ```bash
-git clone https://github.com/your-username/cognote.git
+git clone https://github.com/aidanlangelaan/cognote.git
 cd cognote
 pip install -e .
 ```
@@ -114,8 +114,27 @@ Each session is saved to:
 
 ## Commands
 
+### `record`
+
+Start a new recording session. Press `Ctrl+C` to stop and generate the transcript.
+
 ```
 cognote record --title "..." [--language nl|en|auto]
+```
+
+### `transcribe`
+
+Transcribe an existing audio file. Writes `transcript.md` and `metadata.yaml` into the same folder as the audio file. Useful for recovering sessions where recording succeeded but transcription failed.
+
+```
+cognote transcribe <audio_file> [--title "..."] [--language nl|en|auto]
+```
+
+Examples:
+
+```bash
+cognote transcribe audio.wav
+cognote transcribe "C:\Recordings\meeting.wav" --title "Team standup" --language nl
 ```
 
 ---
