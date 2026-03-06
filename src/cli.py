@@ -1,6 +1,6 @@
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import click
@@ -107,5 +107,68 @@ def record(title: str | None, language: str | None) -> None:
 
     click.echo(f"\nDone. Session saved to: {session_path}")
     click.echo(f"  {audio_path.name}")
+    click.echo(f"  {transcript_path.name}")
+    click.echo(f"  {metadata_path.name}")
+
+
+@main.command(name="transcribe", context_settings={"help_option_names": ["--help"]})
+@click.argument("audio_file", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--title", default=None, help="Title for the transcript. Defaults to the audio filename.")
+@click.option(
+    "--language", default=None,
+    help="Language of the recording: nl, en, or auto. Overrides cognote.yaml for this session.",
+)
+def transcribe_cmd(audio_file: Path, title: str | None, language: str | None) -> None:
+    """Transcribe an existing audio file and write transcript.md and metadata.yaml alongside it."""
+    cfg = config.load()
+    config.ensure_exists()
+
+    language_mode = language if language is not None else cfg["transcript_language_mode"]
+    session_path = audio_file.parent
+    resolved_title = title if title else audio_file.stem
+
+    # Derive start time from the file's modification time; end from last segment.
+    start = datetime.fromtimestamp(audio_file.stat().st_mtime)
+
+    click.echo(f"Transcribing: {audio_file}")
+    click.echo("Please wait — do not press Ctrl+C or the transcript will be lost.")
+
+    try:
+        segments, detected_language = transcribe(
+            audio_file,
+            language_mode,
+            model_size=cfg["model_size"],
+            device=cfg["device"],
+            compute_type=cfg["compute_type"],
+        )
+
+        if segments:
+            end = start + timedelta(seconds=segments[-1].end)
+        else:
+            end = start
+
+        transcript_path = writer.write_transcript(
+            session_path=session_path,
+            title=resolved_title,
+            start=start,
+            end=end,
+            language=detected_language,
+            segments=segments,
+            include_timestamps=cfg["include_timestamps"],
+        )
+
+        metadata_path = writer.write_metadata(
+            session_path=session_path,
+            title=resolved_title,
+            start=start,
+            end=end,
+            language=detected_language,
+            audio_filename=audio_file.name,
+        )
+    except KeyboardInterrupt:
+        click.echo("\nTranscription interrupted. No transcript was generated.")
+        sys.exit(1)
+
+    click.echo(f"\nDone. Output written to: {session_path}")
     click.echo(f"  {transcript_path.name}")
     click.echo(f"  {metadata_path.name}")
