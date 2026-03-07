@@ -38,6 +38,7 @@ def transcribe(
     model_size: str = "base",
     device: str = "cpu",
     compute_type: str = "int8",
+    on_segment: callable = None,
 ) -> tuple[list[Segment], str]:
     """Transcribe the audio file and return segments plus detected language.
 
@@ -47,6 +48,7 @@ def transcribe(
         model_size:    Whisper model size (tiny/base/small/medium/large-v2/large-v3).
         device:        "cpu" or "cuda".
         compute_type:  "int8" (cpu), "float16" or "int8_float16" (cuda).
+        on_segment:    Optional callback called with each Segment as it is produced.
 
     Returns:
         Tuple of (segments, detected_language).
@@ -57,9 +59,11 @@ def transcribe(
     model = WhisperModel(model_size, device=device, compute_type=compute_type)
     raw_segments, info = model.transcribe(str(audio_path), language=language)
 
-    segments = [
-        Segment(start=s.start, end=s.end, text=s.text.strip())
-        for s in raw_segments
-    ]
+    segments = []
+    for s in raw_segments:
+        seg = Segment(start=s.start, end=s.end, text=s.text.strip())
+        segments.append(seg)
+        if on_segment is not None:
+            on_segment(seg)
 
     return segments, info.language

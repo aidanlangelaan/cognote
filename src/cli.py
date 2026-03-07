@@ -4,8 +4,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import click
+import yaml
 
-from cognote import config, writer
+from cognote import config, utils, writer
 from cognote.recorder import Recorder
 from cognote.transcriber import transcribe
 
@@ -88,11 +89,14 @@ def record(title: str | None, language: str | None) -> None:
 
     try:
         while True:
-            time.sleep(0.5)
+            elapsed = datetime.now() - start
+            m, s = divmod(int(elapsed.total_seconds()), 60)
+            click.echo(f"\r  {m:02d}:{s:02d}", nl=False)
+            time.sleep(1)
     except KeyboardInterrupt:
-        pass
+        click.echo()  # move to a new line after the timer
 
-    click.echo("\nStopping recording...")
+    click.echo("Stopping recording...")
     recorder.stop()
 
     end = datetime.now()
@@ -107,6 +111,7 @@ def record(title: str | None, language: str | None) -> None:
             model_size=cfg["model_size"],
             device=cfg["device"],
             compute_type=cfg["compute_type"],
+            on_segment=lambda seg: click.echo(f"  [{utils.format_timestamp(seg.start)}] {seg.text}"),
         )
 
         transcript_path = writer.write_transcript(
@@ -166,6 +171,7 @@ def transcribe_cmd(audio_file: Path, title: str | None, language: str | None) ->
             model_size=cfg["model_size"],
             device=cfg["device"],
             compute_type=cfg["compute_type"],
+            on_segment=lambda seg: click.echo(f"  [{utils.format_timestamp(seg.start)}] {seg.text}"),
         )
 
         if segments:
@@ -198,3 +204,45 @@ def transcribe_cmd(audio_file: Path, title: str | None, language: str | None) ->
     click.echo(f"\nDone. Output written to: {session_path}")
     click.echo(f"  {transcript_path.name}")
     click.echo(f"  {metadata_path.name}")
+
+
+@main.command(name="list", context_settings={"help_option_names": ["--help"]})
+def list_cmd() -> None:
+    """List all recorded sessions."""
+    cfg = config.load()
+    output_root = Path(cfg["output_root"])
+
+    if not output_root.exists():
+        click.echo("No sessions found. Output folder does not exist yet.")
+        return
+
+    metadata_files = sorted(output_root.glob("*/*/*/*/metadata.yaml"), reverse=True)
+
+    if not metadata_files:
+        click.echo("No sessions found.")
+        return
+
+    for meta_file in metadata_files:
+        with meta_file.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        title = data.get("title", "Unknown")
+        date = data.get("date", "?")
+        start_time = data.get("start_time", "?")
+        end_time = data.get("end_time", "")
+        language = data.get("language", "?")
+
+        duration_str = ""
+        if start_time and end_time:
+            try:
+                t0 = datetime.strptime(start_time, "%H:%M")
+                t1 = datetime.strptime(end_time, "%H:%M")
+                diff = t1 - t0
+                if diff.total_seconds() < 0:
+                    diff += timedelta(hours=24)
+                total_mins = int(diff.total_seconds() / 60)
+                duration_str = f"{total_mins // 60}h {total_mins % 60:02d}m" if total_mins >= 60 else f"{total_mins}m"
+            except ValueError:
+                pass
+
+        click.echo(f"{date}  {start_time}  {duration_str:6}  [{language}]  {title}")
