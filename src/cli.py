@@ -10,7 +10,33 @@ from cognote.recorder import Recorder
 from cognote.transcriber import transcribe
 
 
-@click.group(invoke_without_command=True)
+class _Group(click.Group):
+    """Click Group that routes all error output through stdout.
+
+    Click's default error handler writes to stderr via the Windows console API,
+    which raises OSError (Windows error 6) in PowerShell. By catching ClickException
+    before Click's own handler runs we can print the message safely via click.echo.
+    """
+
+    def main(self, *args, **kwargs) -> None:
+        kwargs["standalone_mode"] = False
+        try:
+            super().main(*args, **kwargs)
+        except click.UsageError as e:
+            click.echo(f"Error: {e.format_message()}")
+            click.echo("Try 'cognote --help' for a list of available commands.")
+            sys.exit(2)
+        except click.ClickException as e:
+            click.echo(f"Error: {e.format_message()}")
+            sys.exit(e.exit_code)
+        except click.Abort:
+            click.echo("Aborted.")
+            sys.exit(1)
+        except SystemExit:
+            raise
+
+
+@click.group(cls=_Group, invoke_without_command=True)
 @click.pass_context
 def main(ctx: click.Context) -> None:
     """Cognote – local meeting recorder and transcriber."""
